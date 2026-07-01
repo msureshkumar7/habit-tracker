@@ -101,6 +101,35 @@ No Android Studio / Xcode needed — Expo builds it on their servers.
 4. When the cloud build finishes, EAS gives you a download link / QR code to
    install the app.
 
+### Option D — Build from GitHub Actions (fully online, recommended)
+
+This repo includes a workflow at `.github/workflows/eas-build.yml` that runs
+EAS Build in the cloud straight from GitHub — **no terminal on your side**.
+
+**One-time setup (all in the browser):**
+
+1. Create a free account at **https://expo.dev**.
+2. Create the project (dashboard **Create a project**, or `eas init` if you have
+   the CLI) and copy its **Project ID**.
+3. Put that ID into `app.json` → `expo.extra.eas.projectId` (currently empty),
+   commit, and push.
+4. Create an **access token**: expo.dev → Account **Settings** → **Access
+   tokens** → *Create token*.
+5. In GitHub: repo **Settings → Secrets and variables → Actions → New repository
+   secret**. Name it **`EXPO_TOKEN`**, paste the token.
+
+**Run a build:**
+
+1. Go to the repo's **Actions** tab → **EAS Build (cloud APK / iOS)**.
+2. Click **Run workflow**, choose the platform (`android`) and profile
+   (`preview`), and run it.
+3. When it finishes, open **https://expo.dev** → your project → **Builds** and
+   download the installable **APK** (or iOS build).
+
+> Snack note: Expo Snack can't run this app (its GitHub importer is finicky and
+> it doesn't support `expo-notifications` or the native time picker), so use
+> Option B, C, or D to test the real app.
+
 ## Run locally (optional)
 
 If you do have a local environment:
@@ -118,8 +147,7 @@ npm run typecheck     # TypeScript check
 - Reminders are **daily repeating local notifications** at the time you pick;
   editing or disabling a habit reschedules or cancels them automatically.
 - Local scheduled notifications work in Expo Go. For the most reliable
-  behavior, a free **EAS development build** (Option C with
-  `--profile development`) is recommended.
+  behavior, a free **EAS build** (Option C/D) is recommended.
 
 ## Data & privacy
 

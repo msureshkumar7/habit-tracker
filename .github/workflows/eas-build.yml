@@ -1,0 +1,74 @@
+name: EAS Build (cloud APK / iOS)
+
+# Cloud-builds the app on Expo's servers — no local Android Studio / Xcode.
+# Trigger it manually from the GitHub "Actions" tab (Run workflow), choosing a
+# platform and build profile.
+#
+# Prerequisites (one-time, all web-based):
+#   1. Create a free account at https://expo.dev
+#   2. Create the project (or run `eas init`) and put its ID into
+#      app.json -> expo.extra.eas.projectId
+#   3. Create an access token at https://expo.dev/accounts/[you]/settings/access-tokens
+#      and add it to this repo as a secret named EXPO_TOKEN
+#      (Settings -> Secrets and variables -> Actions -> New repository secret)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: android
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: EAS build profile (see eas.json)
+        type: choice
+        default: preview
+        options:
+          - preview
+          - production
+          - development
+
+jobs:
+  build:
+    name: Build ${{ github.event.inputs.platform }} (${{ github.event.inputs.profile }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Fail early if EXPO_TOKEN is missing
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Run EAS Build
+        run: |
+          eas build \
+            --platform "${{ github.event.inputs.platform }}" \
+            --profile "${{ github.event.inputs.profile }}" \
+            --non-interactive \
+            --no-wait
+
+      - name: Where to get the build
+        run: echo "Build queued. Download the installable app from https://expo.dev once it finishes."
