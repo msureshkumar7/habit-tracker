@@ -44,7 +44,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          # No npm cache: this project intentionally ships without a lockfile,
+          # and `cache: npm` fails when no package-lock.json is present.
 
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
@@ -60,7 +61,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm install
 
       - name: Run EAS Build
         run: |
