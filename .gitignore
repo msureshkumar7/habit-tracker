@@ -32,3 +32,20 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+npm-debug.*
+*.orig.*
+.DS_Store
+
+# Expo native build output
+/android
+/ios
+
+# Environment
+.env
+.env.local
