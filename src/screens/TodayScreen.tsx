@@ -15,14 +15,14 @@ import { useHabits } from '../context/HabitsContext';
 import HabitRow from '../components/HabitRow';
 import { colors, radius, spacing } from '../theme';
 import { todayKey } from '../utils/date';
-import { isDone } from '../storage/completions';
+import { isDone, getDayProgress } from '../storage/completions';
 import { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function TodayScreen() {
   const navigation = useNavigation<Nav>();
-  const { habits, completions, loading, toggle } = useHabits();
+  const { habits, completions, loading, toggle, markReminder } = useHabits();
   const day = todayKey();
 
   const completedCount = habits.filter((h) => isDone(completions, h.id, day)).length;
@@ -76,7 +76,12 @@ export default function TodayScreen() {
           <HabitRow
             habit={item}
             done={isDone(completions, item.id, day)}
+            reminderFlags={getDayProgress(completions, item.id, day).reminders}
             onToggle={() => toggle(item.id, day)}
+            onToggleReminder={(reminderId) => {
+              const flags = getDayProgress(completions, item.id, day).reminders;
+              markReminder(item.id, reminderId, !flags[reminderId], day);
+            }}
             onEdit={() => navigation.navigate('EditHabit', { habitId: item.id })}
           />
         )}

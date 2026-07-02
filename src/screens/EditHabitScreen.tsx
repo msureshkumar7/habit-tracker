@@ -20,9 +20,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useHabits } from '../context/HabitsContext';
 import { colors, habitColors, radius, spacing } from '../theme';
 import { RootStackParamList } from '../navigation/types';
-import { Habit } from '../types';
-import { newHabitId } from '../storage/habits';
-import { syncReminder } from '../notifications/reminders';
+import { Habit, Reminder, SOUND_OPTIONS } from '../types';
+import { newHabitId, newReminderId } from '../storage/habits';
+import { previewSound } from '../notifications/reminders';
 import { formatTime, pad2, parseTime } from '../utils/date';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'EditHabit'>;
@@ -40,28 +40,47 @@ export default function EditHabitScreen() {
   const [goal, setGoal] = useState(existing?.goal ?? '');
   const [remarks, setRemarks] = useState(existing?.remarks ?? '');
   const [color, setColor] = useState(existing?.color ?? habitColors[0]);
+  const [sound, setSound] = useState(existing?.sound ?? 'default');
   const [reminderEnabled, setReminderEnabled] = useState(
     existing?.reminderEnabled ?? false
   );
-  const [reminderTime, setReminderTime] = useState<string>(
-    existing?.reminderTime ?? '09:00'
+  const [reminders, setReminders] = useState<Reminder[]>(
+    existing?.reminders?.length
+      ? existing.reminders
+      : [{ id: newReminderId(), time: '09:00', label: '', notificationId: null }]
   );
-  const [showPicker, setShowPicker] = useState(false);
+  // id of the reminder whose time picker is open, or null
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: existing ? 'Edit Habit' : 'New Habit' });
   }, [navigation, existing]);
 
-  const onChangeTime = (event: DateTimePickerEvent, date?: Date) => {
-    // On Android the picker is a dialog; close it after a pick/dismiss.
-    if (Platform.OS === 'android') setShowPicker(false);
-    if (event.type === 'dismissed' || !date) return;
-    setReminderTime(`${pad2(date.getHours())}:${pad2(date.getMinutes())}`);
+  const addReminder = () => {
+    setReminders((rs) => [
+      ...rs,
+      { id: newReminderId(), time: '12:00', label: '', notificationId: null },
+    ]);
   };
 
-  const timeAsDate = (): Date => {
-    const parsed = parseTime(reminderTime) ?? { hour: 9, minute: 0 };
+  const removeReminder = (id: string) => {
+    setReminders((rs) => rs.filter((r) => r.id !== id));
+  };
+
+  const updateReminder = (id: string, patch: Partial<Reminder>) => {
+    setReminders((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  const onChangeTime = (event: DateTimePickerEvent, date?: Date) => {
+    const id = pickerFor;
+    if (Platform.OS === 'android') setPickerFor(null);
+    if (event.type === 'dismissed' || !date || !id) return;
+    updateReminder(id, { time: `${pad2(date.getHours())}:${pad2(date.getMinutes())}` });
+  };
+
+  const timeAsDate = (time: string): Date => {
+    const parsed = parseTime(time) ?? { hour: 9, minute: 0 };
     const d = new Date();
     d.setHours(parsed.hour, parsed.minute, 0, 0);
     return d;
@@ -72,31 +91,21 @@ export default function EditHabitScreen() {
       Alert.alert('Name required', 'Please enter a habit name.');
       return;
     }
+    if (reminderEnabled && reminders.length === 0) {
+      Alert.alert('Add a reminder', 'Add at least one reminder or turn reminders off.');
+      return;
+    }
     setSaving(true);
     try {
-      const notificationId = await syncReminder(
-        existing?.notificationId ?? null,
-        reminderEnabled,
-        name.trim(),
-        reminderTime
-      );
-
-      if (reminderEnabled && notificationId === null) {
-        Alert.alert(
-          'Reminder not scheduled',
-          'Notifications permission was denied, so the habit is saved without a reminder. You can enable notifications in system settings.'
-        );
-      }
-
       const habit: Habit = {
         id: existing?.id ?? newHabitId(),
         name: name.trim(),
         goal: goal.trim(),
         remarks: remarks.trim(),
         color,
-        reminderEnabled: reminderEnabled && notificationId !== null,
-        reminderTime: reminderEnabled ? reminderTime : null,
-        notificationId,
+        sound,
+        reminderEnabled,
+        reminders: reminders.map((r) => ({ ...r, label: r.label.trim() })),
         createdAt: existing?.createdAt ?? Date.now(),
       };
       await saveHabit(habit);
@@ -121,6 +130,16 @@ export default function EditHabitScreen() {
     ]);
   };
 
+  const onTestSound = async () => {
+    const ok = await previewSound(sound);
+    if (!ok) {
+      Alert.alert(
+        'Notifications off',
+        'Enable notification permission to preview the sound.'
+      );
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -136,12 +155,12 @@ export default function EditHabitScreen() {
         placeholderTextColor={colors.subtext}
       />
 
-      <Text style={styles.label}>Goal</Text>
+      <Text style={styles.label}>Daily goal</Text>
       <TextInput
         style={styles.input}
         value={goal}
         onChangeText={setGoal}
-        placeholder="e.g. 8 glasses a day"
+        placeholder="e.g. 2 L water"
         placeholderTextColor={colors.subtext}
       />
 
@@ -174,10 +193,10 @@ export default function EditHabitScreen() {
 
       <View style={styles.reminderHeader}>
         <View>
-          <Text style={styles.label}>Daily reminder</Text>
-          {reminderEnabled && (
-            <Text style={styles.reminderTimeText}>{formatTime(reminderTime)}</Text>
-          )}
+          <Text style={styles.label}>Reminders</Text>
+          <Text style={styles.hintText}>
+            Split your goal into steps. Complete all to auto-mark the day.
+          </Text>
         </View>
         <Switch
           value={reminderEnabled}
@@ -188,21 +207,67 @@ export default function EditHabitScreen() {
 
       {reminderEnabled && (
         <>
-          <Pressable style={styles.timeBtn} onPress={() => setShowPicker(true)}>
-            <Ionicons name="time-outline" size={18} color={colors.primary} />
-            <Text style={styles.timeBtnText}>
-              Reminder at {formatTime(reminderTime)}
-            </Text>
+          {reminders.map((r, idx) => (
+            <View key={r.id} style={styles.reminderRow}>
+              <Pressable style={styles.timePill} onPress={() => setPickerFor(r.id)}>
+                <Ionicons name="time-outline" size={16} color={colors.primary} />
+                <Text style={styles.timePillText}>{formatTime(r.time)}</Text>
+              </Pressable>
+              <TextInput
+                style={styles.reminderLabelInput}
+                value={r.label}
+                onChangeText={(t) => updateReminder(r.id, { label: t })}
+                placeholder={`Step ${idx + 1} (e.g. 500 ml)`}
+                placeholderTextColor={colors.subtext}
+              />
+              <Pressable
+                onPress={() => removeReminder(r.id)}
+                hitSlop={8}
+                style={styles.removeBtn}
+              >
+                <Ionicons name="close-circle" size={22} color={colors.danger} />
+              </Pressable>
+            </View>
+          ))}
+
+          <Pressable style={styles.addReminderBtn} onPress={addReminder}>
+            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+            <Text style={styles.addReminderText}>Add reminder</Text>
           </Pressable>
-          {showPicker && (
+
+          {pickerFor && (
             <DateTimePicker
-              value={timeAsDate()}
+              value={timeAsDate(reminders.find((r) => r.id === pickerFor)?.time ?? '09:00')}
               mode="time"
               is24Hour={false}
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onChangeTime}
             />
           )}
+
+          <Text style={styles.label}>Reminder sound</Text>
+          <View style={styles.soundRow}>
+            {SOUND_OPTIONS.map((s) => (
+              <Pressable
+                key={s.key}
+                onPress={() => setSound(s.key)}
+                style={[styles.soundChip, sound === s.key && styles.soundChipActive]}
+              >
+                <Text
+                  style={[
+                    styles.soundChipText,
+                    sound === s.key && styles.soundChipTextActive,
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable style={styles.testBtn} onPress={onTestSound}>
+            <Ionicons name="volume-high-outline" size={16} color={colors.primary} />
+            <Text style={styles.testBtnText}>Test sound</Text>
+          </Pressable>
         </>
       )}
 
@@ -234,6 +299,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginTop: spacing.md,
   },
+  hintText: { fontSize: 12, color: colors.subtext, maxWidth: 240 },
   input: {
     backgroundColor: colors.card,
     borderRadius: radius.md,
@@ -255,28 +321,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colorDotSelected: {
-    borderWidth: 3,
-    borderColor: colors.text,
-  },
+  colorDotSelected: { borderWidth: 3, borderColor: colors.text },
   reminderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.sm,
   },
-  reminderTimeText: { fontSize: 13, color: colors.primary, marginTop: 2 },
-  timeBtn: {
+  reminderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
     marginTop: spacing.sm,
+  },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEECFB',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  timePillText: { marginLeft: 4, color: colors.primary, fontWeight: '600', fontSize: 13 },
+  reminderLabelInput: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+    color: colors.text,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  timeBtnText: { marginLeft: spacing.sm, color: colors.text, fontSize: 15 },
+  removeBtn: { paddingLeft: spacing.sm },
+  addReminderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+  },
+  addReminderText: { marginLeft: 6, color: colors.primary, fontWeight: '600' },
+  soundRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  soundChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  soundChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  soundChipText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  soundChipTextActive: { color: '#fff' },
+  testBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+  },
+  testBtnText: { marginLeft: 6, color: colors.primary, fontWeight: '600' },
   saveBtn: {
     backgroundColor: colors.primary,
     borderRadius: radius.md,

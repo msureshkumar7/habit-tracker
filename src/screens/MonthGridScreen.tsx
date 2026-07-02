@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useHabits } from '../context/HabitsContext';
 import { colors, radius, spacing } from '../theme';
 import { daysInMonth, keyForDay, monthLabel } from '../utils/date';
-import { isDone } from '../storage/completions';
+import { isDone, getDayProgress } from '../storage/completions';
 
 const CELL = 36;
 const NAME_W = 120;
@@ -91,6 +91,10 @@ export default function MonthGridScreen() {
                     {days.map((d) => {
                       const key = keyForDay(year, month0, d);
                       const done = isDone(completions, h.id, key);
+                      // Partial: some sub-reminders done but not all.
+                      const flags = getDayProgress(completions, h.id, key).reminders;
+                      const partial =
+                        !done && Object.values(flags).some(Boolean);
                       return (
                         <Pressable
                           key={d}
@@ -101,11 +105,16 @@ export default function MonthGridScreen() {
                             style={[
                               styles.mark,
                               done && { backgroundColor: h.color },
+                              partial && { borderColor: h.color },
                             ]}
                           >
-                            {done && (
+                            {done ? (
                               <Ionicons name="checkmark" size={16} color="#fff" />
-                            )}
+                            ) : partial ? (
+                              <View
+                                style={[styles.partialDot, { backgroundColor: h.color }]}
+                              />
+                            ) : null}
                           </View>
                         </Pressable>
                       );
@@ -173,6 +182,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  partialDot: { width: 8, height: 8, borderRadius: 4 },
   hint: {
     fontSize: 12,
     color: colors.subtext,

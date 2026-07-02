@@ -11,9 +11,16 @@ monthly grid, set daily reminders, and watch your **Daily Habits Score Graph**.
 ## Features
 
 - ✅ **Add habits** with a name, goal, remarks, and color
-- ⏰ **Daily reminders** — schedule a per-habit notification at a chosen time
+- ⏰ **Multiple reminders per habit** — split a daily goal (e.g. "2 L water")
+  into several timed sub-reminders, each with an optional label ("500 ml")
+- ✅ **Yes/No on the notification** — each reminder shows **Done** / **Skip**
+  buttons; tapping **Done** marks that step
+- 🎯 **Auto-mark the grid** — when *all* of a habit's sub-reminders are done for
+  the day, that day auto-completes in the month grid and progress chart
+- 🔔 **Custom reminder sound** — pick a built-in tone per habit (Chime, Bell,
+  Calm) with a Test button to preview
 - 🗓️ **Monthly grid** — tap a cell to mark a habit done for any day (like the
-  paper tracker), with month navigation
+  paper tracker), with month navigation and a partial-progress indicator
 - 📊 **Progress score graph** — daily completion chart plus check-in, best-day,
   and completion-rate stats
 - 💾 **On-device storage** — everything is saved locally (AsyncStorage). No
